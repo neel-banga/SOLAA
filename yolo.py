@@ -1,57 +1,59 @@
 import cv2
 import numpy as np
-import time
-import audio
 from ultralytics import YOLO
+import time
+import face_det
+import audio
+import os
 
+cap = cv2.VideoCapture(0)
+model = YOLO('yolov8n.pt')
 
+said = []
 
 def yolo():
-    # Model
-    model = YOLO('yolov8n.pt')
-
+    num = 0
     start_time = time.time()
-
-    audio.say('I CAN SEE A...')
-
-    # Open the video capture device (webcam)
-    lst = []
-    cap = cv2.VideoCapture(0)
-    while time.time() - start_time < 10:
+    while time.time() - start_time < 20:
+        num += 1
         ret, frame = cap.read()
+        # Pass the frame through the YOLO model for prediction
+        results = model.predict(frame)
+        if results and len(results[0].boxes) > 0:
+            result = results[0]
+            box = result.boxes[0]
+            for box in result.boxes:
+                class_id = result.names[box.cls[0].item()]
+                cords = box.xyxy[0].tolist()
+                cords = [round(x) for x in cords]
+                conf = round(box.conf[0].item(), 2)
+                print("Object type:", class_id)
+                print("Coordinates:", cords)
+                print("Probability:", conf)
+                print("---")
+                image = cv2.rectangle(frame, (cords[0],cords[1]), (cords[2],cords[3]), (255,0,0), 2)
+                cv2.putText(image, text= str(class_id), org=(cords[0],cords[1]),
+                    fontFace= cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=(0,0,0),
+                    thickness=2, lineType=cv2.LINE_AA)
+                cv2.imshow('yolo', image)
 
-        # Make detections
-    # Model
-    results = model.predict(source="0",show=True)
-
-    df = results.pandas().xyxy[0]
-
-    for i in df['name']:
-        if i not in lst:
-            lst.append(i)
-            new_label = i
-            time.sleep(2)
-            confidence = df[df['name'] == new_label]['confidence'].max().item()
-
-            print(new_label)
-
-            if confidence >= 0.35:
-                # Determine direction based on object's bounding box center
-                bbox_center_x = (df[df['name'] == new_label]['xmax'].iloc[0] + df[df['name'] == new_label]['xmin'].iloc[0]) / 2
-                bbox_center_y = (df[df['name'] == new_label]['ymax'].iloc[0] + df[df['name'] == new_label]['ymin'].iloc[0]) / 2
-                frame_center_x = frame.shape[1] / 2
-                frame_center_y = frame.shape[0] / 2
-
-                if bbox_center_x > frame_center_x:
-                    direction_x = "to your right"
+                if class_id.lower() == 'person':
+                    path = ''
+                    num +=1
+                    cv2.imwrite(f"image{num}.jpg", frame)
+                    name = face_det.check(f"image{num}.jpg")
+                    os.remove(f"image{num}.jpg")
+                    if name not in said:
+                        audio.say(name)
+                        said.append(name)
                 else:
-                    direction_x = "to your left"
+                    if name not in said:
+                        audio.say(class_id)
+                        said.append(class_id)
 
-                if bbox_center_y < frame_center_y: # Flip the comparison for vertical direction
-                    direction_y = "above you" # Flip the direction description
-                else:
-                    direction_y = "below you" # Flip the direction description
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-                audio.say(f"{new_label} {direction_x} {direction_y}")
-
-yolo()
+        # When everything is done, release the capture
+    cap.release()
+    cv2.destroyAllWindows()
