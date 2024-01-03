@@ -75,10 +75,14 @@ def check(image):
     predicted_class = torch.argmax(output)
     print(predicted_class)
     print("Predicted class:", predicted_class.item())
-    if predicted_class.item() == 1:
-        return 'NEEL'
+
+    if abs(output[0, 0].item() - output[0, 1].item()) > 8:
+        if predicted_class.item() == 0:
+            return 'NEEL'
+        else:
+            return 'VEDANT'
     else:
-        return 'VEDANT'
+        return ''
 
 
 net.load_state_dict((torch.load('model.pth')))
